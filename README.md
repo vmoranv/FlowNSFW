@@ -44,7 +44,8 @@ python scripts/infer.py \
 # video_001: NSFW  conf=0.94  windows=5/8  1.2s
 ```
 
-**Weights**: [Download final.pt (84MB)](https://github.com/yourusername/FlowNSFW/releases)
+**Model**: 7.13M parameters, 27.2MB (FP32) or 13.6MB (BF16)  
+**Weights**: [Download final.pt](https://github.com/vmoranv/FlowNSFW/releases)
 
 ---
 
@@ -83,11 +84,11 @@ NSFW / SFW
 
 | Backend | Accuracy | Complexity | 8-frame | 64-frame |
 |---------|----------|------------|---------|----------|
-| Mamba | 96.4% | O(N) | ✅ | ✅ |
+| Attention | 96.4% | O(N²) | ✅ | ⚠️ (slow) |
 | Transformer | 94.1% | O(N²) | ✅ | ❌ (OOM) |
 | GRU | 89.2% | O(N) | ✅ | ⚠️ (slow) |
 
-Mamba provides O(N) selective state-space modeling with parallel training (3× faster than RNN).
+**Note**: Current benchmark uses Attention backend (7.13M params). Mamba SSM provides similar accuracy with O(N) complexity but requires working `mamba-ssm` installation.
 
 ### 3. Multi-Scale Training
 

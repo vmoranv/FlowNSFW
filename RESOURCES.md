@@ -19,18 +19,20 @@
 
 ### Model Zoo
 
-| Model | Size | Accuracy | Speed | Download |
-|-------|------|----------|-------|----------|
-| FlowNSFW-Tiny | 21MB | 92.8% | 180ms | Coming Soon |
-| **FlowNSFW-Base** | **84MB** | **96.4%** | **411ms** | [v1.0.0](https://github.com/vmoranv/FlowNSFW/releases) |
-| FlowNSFW-Large | 124MB | 96.8% | 820ms | Coming Soon |
+| Model | Params | Size (FP32) | Accuracy | Speed | Download |
+|-------|--------|-------------|----------|-------|----------|
+| FlowNSFW-Tiny | 2.1M | ~8MB | 92.8% | 180ms | Coming Soon |
+| **FlowNSFW-Base** | **7.13M** | **27.2MB** | **96.4%** | **411ms** | [v1.0.0](https://github.com/vmoranv/FlowNSFW/releases) |
+| FlowNSFW-Large | 15M | ~60MB | 96.8% | 820ms | Coming Soon |
+
+**Note**: Base model benchmarked with Attention backend. Mamba SSM variant has similar accuracy but O(N) complexity.
 
 ### Pretrained Weights
 
 Download from [Releases](https://github.com/vmoranv/FlowNSFW/releases/tag/v1.0.0):
 
-- `final.pt` (84MB) - FlowNSFW-Base, step 11800, 96.4% accuracy
-- **Checksum (MD5)**: `1d256c343609665b613b34c771ea82d6`
+- `final.pt` (27.2MB) - FlowNSFW-Base, 7.13M params, 96.4% accuracy
+- **Checksum (MD5)**: Coming soon (upload weights to create release)
 
 ### Datasets
 
