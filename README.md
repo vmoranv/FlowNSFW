@@ -201,16 +201,4 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-## 🔗 Links
-
-- **Paper**: [Coming soon]
-- **Weights**: [GitHub Releases](https://github.com/vmoranv/FlowNSFW/releases)
-- **Resources**: [RESOURCES.md](RESOURCES.md) - Model zoo, datasets, related work
-- **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md) - How to contribute
-- **Security**: [SECURITY.md](SECURITY.md) - Security policy & best practices
-- **Changelog**: [CHANGELOG.md](CHANGELOG.md) - Version history
-- **Issues**: [GitHub Issues](https://github.com/vmoranv/FlowNSFW/issues)
-
----
-
 **Star ⭐ this repo if FlowNSFW helps your research or project!**
