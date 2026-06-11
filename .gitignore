@@ -33,6 +33,10 @@ data/
 *.webp
 *.json
 
+# Keep documentation assets
+!assets/*.png
+!assets/*.jpg
+
 # Delivery packages - DEVELOPMENT ONLY
 delivery_package/
 flow_nsfw_a10_package/
