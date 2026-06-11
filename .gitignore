@@ -79,7 +79,9 @@ baselines/
 build_*.py
 fix_*.py
 fix_*.sh
-test_*.py
+
+# Keep essential test scripts
+!scripts/test_smoke.py
 
 # Documentation scratch
 *_SUMMARY.md
