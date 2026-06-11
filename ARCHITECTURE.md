@@ -325,6 +325,85 @@ def infer_video(model, frame_dir, clip_len=8, stride=4):
     return verdict, per_frame_conf
 ```
 
+### 8.1 模型输出格式
+
+```python
+# 单次前向传播输出
+output = model(frames)  # frames: (B, T, 3, H, W)
+
+# 输出字典结构:
+{
+    # 视频级分类
+    "video_cls": Tensor(B, 2),  # [SFW_logit, NSFW_logit]
+    
+    # 多尺度检测结果（原始 logits）
+    "raw_s8": Tensor(B*T, 6, H/8, W/8),   # stride 8
+    "raw_s4": Tensor(B*T, 6, H/4, W/4),   # stride 4
+    "raw_s2": Tensor(B*T, 6, H/2, W/2),   # stride 2
+    "raw_s1": Tensor(B*T, 6, H, W),       # stride 1
+    
+    # 解码后的检测框（每个尺度）
+    "decoded": [
+        {
+            "stride": 8,
+            "cx": Tensor(B*T, H/8, W/8),      # 中心 x（归一化）
+            "cy": Tensor(B*T, H/8, W/8),      # 中心 y（归一化）
+            "w": Tensor(B*T, H/8, W/8),       # 宽度（归一化）
+            "h": Tensor(B*T, H/8, W/8),       # 高度（归一化）
+            "obj": Tensor(B*T, H/8, W/8),     # 置信度 [0, 1]
+            "cls": Tensor(B*T, 1, H/8, W/8),  # 类别 logits
+        },
+        # ... s4, s2, s1 同样结构
+    ],
+    
+    # 光流（可选，训练时输出）
+    "flow_fwd": Tensor(B, T-1, 2, H, W),  # 前向光流 (dx, dy)
+    "flow_bwd": Tensor(B, T-1, 2, H, W),  # 后向光流 (dx, dy)
+}
+```
+
+### 8.2 推理结果 JSON 格式
+
+```json
+{
+  "video_id": "pexels_12345_frames",
+  "verdict": "NSFW",
+  "max_conf": 0.94,
+  "nsfw_windows": 5,
+  "total_windows": 8,
+  "infer_resolution": "480x480",
+  "n_frames": 32,
+  
+  "per_frame_conf": [
+    0.12, 0.15, 0.89, 0.94, 0.91, 0.88, 0.23, 0.18, ...
+  ],
+  
+  "windows": [
+    {
+      "start": 0,
+      "end": 8,
+      "nsfw_conf": 0.12,
+      "sfw_conf": 0.88,
+      "verdict": "SFW"
+    },
+    {
+      "start": 4,
+      "end": 12,
+      "nsfw_conf": 0.94,
+      "sfw_conf": 0.06,
+      "verdict": "NSFW"
+    }
+  ]
+}
+```
+
+**字段说明**:
+- `verdict`: 视频级判定（"NSFW" / "SFW"）
+- `max_conf`: 所有窗口中最高的 NSFW 置信度
+- `nsfw_windows`: 判定为 NSFW 的窗口数（conf > 0.5）
+- `per_frame_conf`: 每帧的最大 NSFW 置信度（多窗口覆盖取最大）
+- `windows`: 所有滑动窗口的详细结果
+
 ---
 
 ## 9. 核心设计原则
