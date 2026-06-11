@@ -1,0 +1,21 @@
+"""Execute: page-by-page hanime scrape via jshook.
+
+Claude will: navigate → console_execute → collect IDs → next page.
+This script just builds the command list.
+"""
+
+GENRE_URLS = [
+    ("anime2d", "裏番", "https://hanime1.me/search?genre=%E8%A3%8F%E7%95%AA&sort=views&page={}"),
+    ("render3d", "3DCG", "https://hanime1.me/search?genre=3DCG&sort=views&page={}"),
+    ("semi2_5d", "2.5D", "https://hanime1.me/search?genre=2.5D&sort=views&page={}"),
+    ("render3d", "MMD", "https://hanime1.me/search?genre=MMD&sort=views&page={}"),
+    ("anime2d", "Motion Anime", "https://hanime1.me/search?genre=Motion+Anime&sort=views&page={}"),
+    ("anime2d", "2D動畫", "https://hanime1.me/search?genre=2D%E5%8B%95%E7%94%BB&sort=views&page={}"),
+    ("semi2_5d", "AI生成", "https://hanime1.me/search?genre=AI%E7%94%9F%E6%88%90&sort=views&page={}"),
+]
+PAGES_PER_GENRE = 3
+
+for domain, genre_label, url_tpl in GENRE_URLS:
+    for pg in range(1, PAGES_PER_GENRE + 1):
+        url = url_tpl.format(pg)
+        print(f"SCRAPE|{domain}|{genre_label}|{pg}|{url}")

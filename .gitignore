@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# PyTorch
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Training artifacts
+runs/
+logs/
+checkpoints/
+*.log
+*.csv
+
+# Data
+datasets/
+data/
+*.mp4
+*.avi
+*.jpg
+*.png
+*.webp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Env
+.env
+.venv/
+venv/
+ENV/
+
+# Temp
+*.tmp
+*.bak
+.cache/
+*.tar.gz
+*.zip

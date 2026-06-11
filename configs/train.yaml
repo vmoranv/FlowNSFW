@@ -1,0 +1,30 @@
+# FlowNSFW training configuration
+# Usage: python scripts/train.py --manifest datasets/manifest.json [other overrides]
+
+model:
+  dim: 128
+  num_heads: 4
+  num_temporal_layers: 3
+  topk_global: 64
+  flow_backend: scratch   # or "raft" for pretrained RAFT
+
+data:
+  manifest: datasets/manifest.json
+  clip_len: 4
+  resolution: [320, 320]   # [H, W]
+
+training:
+  epochs: 50
+  batch_size: 2
+  lr: 2.0e-4
+  weight_decay: 1.0e-4
+  warmup: 500
+  bf16: true
+
+loss:
+  box: 5.0
+  obj: 1.0
+  cls: 1.0
+  video_cls: 0.5
+  temporal: 0.3
+  scale_weights: [0.25, 0.25, 0.25, 0.25]

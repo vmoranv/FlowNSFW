@@ -1,0 +1,7 @@
+torch>=2.10
+mamba-ssm>=2.3
+causal-conv1d>=1.6
+numpy
+opencv-python
+tqdm
+ultralytics  # only for pseudo-label generation, not training
