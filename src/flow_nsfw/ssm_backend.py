@@ -173,7 +173,7 @@ def create_ssm_layer(
     """
     if backend == "mamba2" or (backend == "auto" and HAS_MAMBA_SSM):
         if not HAS_MAMBA_SSM:
-            print(f"[ssm_backend] mamba_ssm not installed, falling back to mamba3")
+            print("[ssm_backend] mamba_ssm not installed, falling back to mamba3")
             backend = "mamba3"
         return _MambaCls(
             d_model=d_model,

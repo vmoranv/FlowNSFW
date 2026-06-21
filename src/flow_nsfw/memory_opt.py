@@ -63,7 +63,7 @@ def benchmark_layout(model: nn.Module, input_shape: tuple, device="cuda", warmup
     speedup = (time_nchw - time_nhwc) / time_nchw * 100
 
     print(f"\n{'='*60}")
-    print(f"Memory Layout Benchmark")
+    print("Memory Layout Benchmark")
     print(f"{'='*60}")
     print(f"Input shape: {input_shape}")
     print(f"NCHW (default):      {time_nchw:.2f} ms/iter")
