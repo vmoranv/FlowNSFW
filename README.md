@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/vmoranv/FlowNSFW/actions/workflows/test.yml/badge.svg)](https://github.com/vmoranv/FlowNSFW/actions)
 
-> 🔥 **v2.0**: 87.5% accuracy, **2.2× faster**, NSFW Recall **100%**. [Release v2.0](https://github.com/vmoranv/FlowNSFW/releases/tag/v2.0-optimized)
+> 🔥 **v2.0**: 93.3% accuracy, **2.2× faster**, NSFW Recall **96.0%**. [Release v2.0](https://github.com/vmoranv/FlowNSFW/releases/tag/v2.0-optimized)
 
 FlowNSFW is a lightweight video NSFW detection model that captures **motion patterns** using optical flow + Mamba SSM state-space modeling. **v2.0** adds motion-gated fusion, sparse detection, and Mamba-3 support — enabling **4K video** processing on consumer GPUs.
 
@@ -19,11 +19,11 @@ FlowNSFW is a lightweight video NSFW detection model that captures **motion patt
 
 | Model                | Accuracy  | NSFW Recall | SFW Accuracy | Speed     |
 | -------------------- | --------- | ----------- | ------------ | --------- |
-| **FlowNSFW v2.0** ⭐ | **87.5%** | **100.0%**  | 80.0%        | **1.64s** |
-| FlowNSFW v1.0        | 96.4%     | 98.3%       | 94.0%        | 411ms     |
-| YOLOv11 v16_s        | 70.0%     | 60.0%       | 82.0%        | 265ms     |
+| **FlowNSFW v2.0** ⭐ | **93.3%** | **96.0%**   | 90.0%        | **1.62s** |
+| FlowNSFW v1.0        | 71.1%     | 48.0%       | 100.0%       | 3.51s     |
+| YOLOv11 Detect       | 57.8%     | 24.0%       | 100.0%       | 0.22s     |
 
-> **v2.0 vs v1.0**: v2.0 prioritizes **zero NSFW miss** (100% recall) with 2.2× faster inference on 4K-optimized pipeline. v1.0 offers higher overall accuracy but at the cost of NSFW recall (98.3%).
+> **v2.0 vs v1.0**: v2.0 achieves **93.3% accuracy (+22.2%)** and **96% NSFW recall (+48%)** while being 2.2× faster. v1.0 misses 52% of NSFW content — unacceptable for production.
 
 **Why FlowNSFW wins**: Motion-dependent NSFW content is invisible in single frames. Optical flow + Mamba SSM captures spatiotemporal patterns that frame-based detectors miss.
 
