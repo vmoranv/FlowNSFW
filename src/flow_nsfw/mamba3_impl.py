@@ -54,7 +54,7 @@ from dataclasses import dataclass, field
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange, repeat
+from einops import rearrange  # repeat imported below in scan functions
 
 
 # ---------------------------------------------------------------------------
