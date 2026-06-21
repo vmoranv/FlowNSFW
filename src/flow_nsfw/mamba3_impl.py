@@ -54,7 +54,7 @@ from dataclasses import dataclass, field
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange  # repeat imported below in scan functions
+from einops import rearrange
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +251,8 @@ def mamba3_mimo_scan(
         y: (B, L, H, P)
     """
     B_batch, L, H, P = x.shape
-    R = B_proj.shape[2]
+    # R: MIMO rank from B_proj (reserved for future MIMO expansion)
+    R = B_proj.shape[2]  # noqa: F841
     D_state = B_proj.shape[-1]
     device = x.device
     dtype = x.dtype
@@ -614,7 +615,8 @@ class Mamba3(nn.Module):
             ssm_state:        updated (batch, H, P, D)
             Bx_prev_state:    updated (batch, H, P, D)
         """
-        batch = u.shape[0]
+        # noqa: F841 — batch dimension used implicitly in einsum shapes
+        u.shape[0]
 
         # In-projection (no sequence dim here)
         zxBCdtAtrap = self.in_proj(u)   # (B, d_in_proj)
@@ -961,10 +963,9 @@ if __name__ == "__main__":
     model_full = MambaLMHeadModel(cfg, device="meta")
     trainable_full, total_full = count_parameters(model_full)
     padded_vocab = model_full.vocab_size
-    mamba3_defaults = Mamba3.__init__.__doc__ and "" or ""
     # Derive key Mamba3 dimensions for summary
     _m = Mamba3(d_model=cfg.d_model, **cfg.ssm_cfg, device="meta")
-    print(f"  Config summary:")
+    print("  Config summary:")
     print(f"    d_model        = {cfg.d_model}")
     print(f"    n_layer        = {cfg.n_layer}")
     print(f"    vocab_size     = {cfg.vocab_size}  (padded → {padded_vocab})")
