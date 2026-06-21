@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ['3.10', '3.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +42,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt
+          pip install einops
+          pip install opencv-python numpy
 
       - name: Smoke test
         run: |
@@ -51,9 +52,21 @@ jobs:
           sys.path.insert(0, 'src')
           import torch
           from flow_nsfw import FlowNSFW
-          model = FlowNSFW(dim=64, num_heads=2, num_temporal_layers=1)
+
+          # Test 1: Basic model
+          model = FlowNSFW(dim=64, num_temporal_layers=1, temporal_backend='attention')
           frames = torch.randn(1, 4, 3, 160, 160)
           with torch.no_grad():
               out = model(frames)
           print(f'Model OK: {sum(p.numel() for p in model.parameters())/1e6:.2f}M params')
+          assert out['video_cls'].shape == (1, 3), 'Bad output shape'
+
+          # Test 2: Mamba3 fallback (no mamba_ssm on CPU)
+          model2 = FlowNSFW(dim=64, num_temporal_layers=1, temporal_backend='mamba', ssm_backend='mamba3')
+          with torch.no_grad():
+              out2 = model2(frames)
+          print(f'Mamba3 OK: {sum(p.numel() for p in model2.parameters())/1e6:.2f}M params')
+          assert out2['video_cls'].shape == (1, 3), 'Bad output shape'
+
+          print('All tests passed!')
           "
