@@ -76,11 +76,11 @@ class _TransformerBlock(nn.Module):
 class _MambaBlock(nn.Module):
     """SSM-based temporal block: O(N) complexity for long sequences."""
 
-    def __init__(self, dim: int, d_state: int = 16, expand: int = 2):
+    def __init__(self, dim: int, d_state: int = 16, expand: int = 2, ssm_backend: str = "auto"):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.ssm = create_ssm_layer(
-            d_model=dim, d_state=d_state, d_conv=4, expand=expand,
+            d_model=dim, d_state=d_state, d_conv=4, expand=expand, backend=ssm_backend,
         )
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = nn.Sequential(
@@ -167,18 +167,23 @@ class SparseGlobalTemporal(nn.Module):
         temporal_backend: str = "attention",
         d_state: int = 16,
         ssm_expand: int = 2,
+        motion_sparse_token: bool = False,
+        sparse_topk: int = 200,
+        ssm_backend: str = "auto",
     ):
         super().__init__()
         self.num_layers = num_layers
         self.topk = topk
         self.backend = temporal_backend
+        self.motion_sparse_token = motion_sparse_token
+        self.sparse_topk = sparse_topk
 
         if temporal_backend == "mamba":
             self.blocks = nn.ModuleList([
-                _MambaBlock(dim, d_state=d_state, expand=ssm_expand)
+                _MambaBlock(dim, d_state=d_state, expand=ssm_expand, ssm_backend=ssm_backend)
                 for _ in range(num_layers)
             ])
-            print(f"[temporal] backend=mamba (resolved: {SSM_BACKEND}), "
+            print(f"[temporal] backend=mamba (resolved: {SSM_BACKEND}, ssm_backend={ssm_backend}), "
                   f"d_state={d_state}, expand={ssm_expand}")
         elif temporal_backend == "hybrid":
             self.blocks = nn.ModuleList([
@@ -200,6 +205,31 @@ class SparseGlobalTemporal(nn.Module):
     def _restore(self, x: Tensor, shape: tuple[int, int, int]) -> Tensor:
         B, H, W = shape
         return x.transpose(1, 2).reshape(B, -1, H, W)
+
+    def _motion_topk_idx(self, anchor: Tensor, flow_fwd: Tensor,
+                         t: int, T: int) -> tuple[Tensor, int]:
+        """A3: pick top-K spatial positions by motion magnitude at frame t.
+
+        anchor: (B,C,H,W). flow_fwd: (B,T-1,2,H,W) or None.
+        Returns idx (B,K) into H*W flatten, and K.
+        """
+        B, C, H, W = anchor.shape
+        if flow_fwd is not None and T > 1:
+            fi = min(t, flow_fwd.shape[1] - 1)          # motion arriving at frame t
+            mag = flow_fwd[:, fi].float().norm(dim=1)   # (B,H,W)
+        else:
+            mag = anchor.float().abs().mean(dim=1)      # fallback: feature energy
+        mag = mag.view(B, H * W)
+        K = min(self.sparse_topk, H * W)
+        _, idx = mag.topk(K, dim=-1)                    # (B,K)
+        return idx, K
+
+    @staticmethod
+    def _gather_tokens(x: Tensor, idx: Tensor) -> Tensor:
+        """x: (B,C,H,W) → gather tokens at idx → (B,K,C)."""
+        B, C, H, W = x.shape
+        flat = x.flatten(2).transpose(1, 2)             # (B,HW,C)
+        return flat.gather(1, idx.unsqueeze(-1).expand(-1, -1, C))
 
     def _build_kv(
         self,
@@ -229,6 +259,28 @@ class SparseGlobalTemporal(nn.Module):
 
         for t in range(T):
             anchor = feat[:, t]
+
+            if self.motion_sparse_token:
+                # A3: only refine top-K motion positions; rest keep raw encoder feat.
+                idx, K = self._motion_topk_idx(anchor, flow_fwd, t, T)
+                q_tokens = self._gather_tokens(anchor, idx)        # (B,K,C)
+                kv_all = self._build_kv(feat, flow_fwd, t, T, q_tokens)
+                x = q_tokens
+                for blk in self.blocks:
+                    if isinstance(blk, _MambaBlock):
+                        full_seq = torch.cat([kv_all, x], dim=1)
+                        refined = blk(full_seq)
+                        x = refined[:, kv_all.shape[1]:, :]
+                    else:
+                        x = blk(x, kv_all)
+                # scatter refined tokens back to dense frame; keep raw feat elsewhere
+                out_dense = anchor.clone()
+                flat = out_dense.flatten(2)                        # (B,C,HW)
+                flat.scatter_(2, idx.unsqueeze(1).expand(-1, C, -1),
+                               x.transpose(1, 2))
+                out_frames.append(flat.view(B, C, H, W))
+                continue
+
             q_tokens, shape = self._tokens(anchor)
             kv_all = self._build_kv(feat, flow_fwd, t, T, q_tokens)
 

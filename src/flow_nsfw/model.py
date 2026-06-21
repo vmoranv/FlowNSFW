@@ -61,21 +61,44 @@ class FlowNSFW(nn.Module):
         temporal_backend: str = "attention",
         d_state: int = 16,
         ssm_expand: int = 2,
+        ssm_backend: str = "auto",
         sparse_detect: bool = False,
         num_classes: int = 1,
         detect_hidden: int = 64,
+        motion_gate: bool = False,
+        motion_tau: float = 0.1,
+        motion_scale: float = 10.0,
+        motion_sparse_token: bool = False,
+        sparse_topk: int = 200,
+        no_encoder: bool = False,
+        patch_size: int = 16,
     ):
         super().__init__()
         self.flow_backend = flow_backend
         self.temporal_backend = temporal_backend
+        self.no_encoder = no_encoder
 
-        # Encoder: bottleneck at stride 8
-        self.encoder = UNetEncoder(
-            in_ch=3, dim=dim,
-            skip_ratios=(0.25, 0.5, 1.0),
-            bottleneck_ratio=2.0,
-        )
-        c0, c1, c2, c3 = self.encoder.channels  # dim/4, dim/2, dim, dim*2
+        # Encoder: UNet (default) or lightweight PatchEmbed (--no-encoder)
+        if no_encoder:
+            from .patch_embed import PatchEmbed, LightweightSkipGenerator
+            self.patch_embed = PatchEmbed(in_ch=3, embed_dim=dim * 2, patch_size=patch_size)
+            self.skip_gen = LightweightSkipGenerator(
+                embed_dim=dim * 2, skip_dims=(dim, dim // 2, dim // 4)
+            )
+            c3 = dim * 2      # bottleneck at patch_size stride
+            c2 = dim
+            c1 = dim // 2
+            c0 = dim // 4
+            print(f"[encoder] PatchEmbed patch_size={patch_size}, "
+                  f"FLOPs@320: {self.patch_embed.count_flops((320,320)):.3f}G, "
+                  f"FLOPs@4K: {self.patch_embed.count_flops((2160,3840)):.3f}G")
+        else:
+            self.encoder = UNetEncoder(
+                in_ch=3, dim=dim,
+                skip_ratios=(0.25, 0.5, 1.0),
+                bottleneck_ratio=2.0,
+            )
+            c0, c1, c2, c3 = self.encoder.channels  # dim/4, dim/2, dim, dim*2
 
         # Flow estimator (optimized correlation via F.unfold + bmm)
         if flow_backend == "raft":
@@ -90,6 +113,9 @@ class FlowNSFW(nn.Module):
             num_layers=num_temporal_layers, topk=topk_global,
             temporal_backend=temporal_backend,
             d_state=d_state, ssm_expand=ssm_expand,
+            motion_sparse_token=motion_sparse_token,
+            sparse_topk=sparse_topk,
+            ssm_backend=ssm_backend,
         )
 
         # We use a simple conv decoder to upsample temporal features to all scales
@@ -134,6 +160,15 @@ class FlowNSFW(nn.Module):
             nn.GroupNorm(8, c3), nn.SiLU(inplace=True),
         )
 
+        # A4-软门: motion-gated flow/rgb blend. Projects rgb skip into flow
+        # channel space so the two can be soft-blended by motion magnitude.
+        # motion_gate=False → branch never runs, behavior identical to baseline.
+        self.motion_gate = motion_gate
+        self.motion_tau = motion_tau
+        self.motion_scale = motion_scale
+        if motion_gate:
+            self.rgb_proj = nn.Conv2d(c0, c3, 1)
+
         # Video-level classifier — temporal features + RGB appearance
         self.video_cls = nn.Sequential(
             nn.Conv2d(c3, c3, 3, padding=1),
@@ -155,8 +190,9 @@ class FlowNSFW(nn.Module):
         def n(m: nn.Module) -> int:
             return sum(p.numel() for p in m.parameters())
         flow_train = sum(p.numel() for p in self.flow_net.parameters() if p.requires_grad)
+        enc = n(self.patch_embed) + n(self.skip_gen) if self.no_encoder else n(self.encoder)
         return {
-            "encoder": n(self.encoder),
+            "encoder": enc,
             "flow_net": n(self.flow_net),
             "flow_trainable": flow_train,
             "temporal": n(self.temporal),
@@ -229,8 +265,17 @@ class FlowNSFW(nn.Module):
         B, T, _, H, W = frames.shape
 
         # --- Encoder ---
-        b_flat, skips_flat = self.encoder(frames.flatten(0, 1))
-        b_seq = b_flat.unflatten(0, (B, T))  # (B,T,c3,H/8,W/8)
+        if self.no_encoder:
+            # PatchEmbed: (B,T,3,H,W) → bottleneck + fake skips
+            frames_flat = frames.flatten(0, 1)  # (B*T,3,H,W)
+            b_flat = self.patch_embed(frames_flat)  # (B*T,c3,h,w)
+            _, s2_flat, s1_flat, s0_flat = self.skip_gen(b_flat)
+            skips_flat = [s2_flat, s1_flat, s0_flat]
+            b_seq = b_flat.unflatten(0, (B, T))
+        else:
+            # UNet encoder
+            b_flat, skips_flat = self.encoder(frames.flatten(0, 1))
+            b_seq = b_flat.unflatten(0, (B, T))  # (B,T,c3,H/8,W/8)
 
         # --- Flow (optimized correlation) ---
         if cached_flow is not None:
@@ -273,7 +318,17 @@ class FlowNSFW(nn.Module):
         # Fuse with RGB content from encoder skip (stride-1), downsample to match
         v_feat_rgb = s0_seq.mean(dim=1)   # (B,c0,H,W)
         v_feat_rgb_ds = F.adaptive_avg_pool2d(v_feat_rgb, v_feat_flow.shape[-2:])
-        v_feat = self.cls_fuse(torch.cat([v_feat_flow, v_feat_rgb_ds], dim=1))
+        if self.motion_gate and flow_fwd is not None:
+            # A4-软门: soft-blend flow vs rgb by motion magnitude.
+            # high motion → flow dominates; low/static → rgb appearance dominates.
+            rgb_f = self.rgb_proj(v_feat_rgb_ds)                     # (B,c3,h,w)
+            mag = flow_fwd.float().abs().mean(dim=[1, 2, 3, 4])      # (B,)
+            alpha = torch.sigmoid((mag - self.motion_tau) * self.motion_scale)
+            alpha = alpha.view(-1, 1, 1, 1).to(v_feat_flow.dtype)
+            blended = alpha * v_feat_flow + (1.0 - alpha) * rgb_f    # (B,c3,h,w)
+            v_feat = self.cls_fuse(torch.cat([blended, v_feat_rgb_ds], dim=1))
+        else:
+            v_feat = self.cls_fuse(torch.cat([v_feat_flow, v_feat_rgb_ds], dim=1))
         v_cls = self.video_cls(v_feat)
 
         return {

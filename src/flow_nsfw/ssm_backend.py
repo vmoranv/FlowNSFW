@@ -1,13 +1,15 @@
-"""SSM backend — 3-tier fallback chain with CUDA acceleration.
+"""SSM backend — 4-tier fallback chain with CUDA acceleration.
 
 Resolution order:
-  1. mamba_ssm.Mamba  — official CUDA selective-scan kernels (fastest)
-  2. HF transformers Mamba2Model — pure-PyTorch associative scan
-  3. _FallbackSSM — hand-rolled cumprod/cumsum (always available)
+  1. mamba_ssm.Mamba  — official Mamba-2 CUDA selective-scan kernels (fastest)
+  2. mamba3_impl.Mamba3 — Mamba-3 pure PyTorch (trapezoidal + RoPE + MIMO)
+  3. HF transformers Mamba2Model — pure-PyTorch associative scan
+  4. _FallbackSSM — hand-rolled cumprod/cumsum (always available)
 
 Usage:
     from .ssm_backend import create_ssm_layer, SSM_BACKEND
-    ssm = create_ssm_layer(d_model=256, d_state=16)
+    ssm = create_ssm_layer(d_model=256, d_state=16, backend="auto")
+    # backend: "auto" | "mamba2" | "mamba3" | "hf" | "fallback"
 """
 
 from __future__ import annotations
@@ -22,8 +24,10 @@ from torch import Tensor
 # ---------------------------------------------------------------------------
 
 HAS_MAMBA_SSM: bool = False
+HAS_MAMBA3: bool = False
 HAS_HF_MAMBA2: bool = False
 _MambaCls = None
+_Mamba3Cls = None
 _HfMamba2Cls = None
 
 try:
@@ -31,6 +35,13 @@ try:
     HAS_MAMBA_SSM = True
     _MambaCls = _MambaImpl
 except ImportError:
+    pass
+
+try:
+    from .mamba3_impl import Mamba3 as _Mamba3Impl
+    HAS_MAMBA3 = True
+    _Mamba3Cls = _Mamba3Impl
+except (ImportError, Exception):
     pass
 
 if not HAS_MAMBA_SSM:
@@ -45,6 +56,8 @@ if not HAS_MAMBA_SSM:
 # Effective backend name
 if HAS_MAMBA_SSM:
     SSM_BACKEND: str = "mamba_ssm_cuda"
+elif HAS_MAMBA3:
+    SSM_BACKEND: str = "mamba3_pytorch"
 elif HAS_HF_MAMBA2:
     SSM_BACKEND: str = "hf_mamba2_pytorch"
 else:
@@ -143,20 +156,48 @@ def create_ssm_layer(
     d_state: int = 16,
     d_conv: int = 4,
     expand: int = 2,
+    backend: str = "auto",
 ) -> nn.Module:
-    """Create the best available SSM layer.
+    """Create SSM layer with explicit backend control.
+
+    Args:
+        backend: "auto" | "mamba2" | "mamba3" | "hf" | "fallback"
+            auto: best available (mamba2 > mamba3 > hf > fallback)
+            mamba2: force mamba_ssm.Mamba (Mamba-2 CUDA)
+            mamba3: force Mamba3 (trapezoidal + RoPE + MIMO)
+            hf: force HF Mamba2Model
+            fallback: force hand-rolled SSM
 
     Returns:
         nn.Module with forward(x: Tensor) -> Tensor, where x is (B, L, D).
     """
-    if HAS_MAMBA_SSM and _MambaCls is not None:
+    if backend == "mamba2" or (backend == "auto" and HAS_MAMBA_SSM):
+        if not HAS_MAMBA_SSM:
+            print(f"[ssm_backend] mamba_ssm not installed, falling back to mamba3")
+            backend = "mamba3"
         return _MambaCls(
             d_model=d_model,
             d_state=d_state,
             d_conv=d_conv,
             expand=expand,
         )
-    elif HAS_HF_MAMBA2 and _HfMamba2Cls is not None:
+    elif backend == "mamba3" or (backend == "auto" and not HAS_MAMBA_SSM and HAS_MAMBA3):
+        if not HAS_MAMBA3:
+            raise RuntimeError("mamba3_impl not available")
+        # Mamba3 API: d_model, d_state, expand, headdim, ...
+        # headdim = d_model // nheads; use expand to get d_inner = d_model * expand
+        # For SSM temporal block we want (B,L,d_model) → (B,L,d_model) at same dim
+        return _Mamba3Cls(
+            d_model=d_model,
+            d_state=d_state,
+            expand=expand,
+            headdim=max(32, d_model // 4),  # heuristic: 4 heads
+            ngroups=1,
+            is_mimo=False,  # SISO default; MIMO needs mimo_rank param
+        )
+    elif backend == "hf" or (backend == "auto" and not HAS_MAMBA_SSM and not HAS_MAMBA3 and HAS_HF_MAMBA2):
+        if not HAS_HF_MAMBA2:
+            raise RuntimeError("transformers Mamba2Model not available")
         from transformers.models.mamba2 import Mamba2Config
         cfg = Mamba2Config(
             hidden_size=d_model,

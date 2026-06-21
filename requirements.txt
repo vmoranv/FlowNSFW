@@ -1,15 +1,29 @@
-# Core dependencies
-torch>=2.0.0
-torchvision>=0.15.0
-numpy>=1.24.0
+# FlowNSFW A10 部署 - 完整依赖
 
-# Image/Video processing
+# PyTorch (CUDA 12.1) - 安装时指定 index-url
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+torch>=2.5.0
+torchvision>=0.20.0
+
+# Mamba SSM (CUDA kernel) - 安装时指定 extra-index-url
+# pip install causal-conv1d mamba-ssm --extra-index-url https://pypi.nvidia.com
+causal-conv1d>=1.4.0
+mamba-ssm>=2.2.0
+
+# CV & ML
 opencv-python>=4.8.0
+einops>=0.7.0
+timm>=0.9.0
+
+# Data & Utils
+pandas>=2.0.0
+tqdm>=4.65.0
+numpy>=1.24.0
 pillow>=10.0.0
 
-# Optional: Mamba SSM (auto-fallback to PyTorch if unavailable)
-# Requires CUDA + compilation environment
-# mamba-ssm>=1.2.0
+# Optional (monitoring & visualization)
+tensorboard>=2.15.0
+matplotlib>=3.7.0
 
 # Development (optional)
 # pytest>=7.4.0

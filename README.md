@@ -16,12 +16,12 @@ FlowNSFW is a lightweight video NSFW detection model that captures **motion patt
 
 ![Performance Comparison](assets/performance_comparison.png)
 
-| Model | Accuracy | NSFW Recall | SFW Accuracy | Speed |
-|-------|----------|-------------|--------------|-------|
-| **FlowNSFW** | **96.4%** | **98.3%** | **94.0%** | 411ms |
-| YOLOv11 v16_s | 70.0% | 60.0% | 82.0% | 265ms |
-| YOLOv11 auto_v14 | 64.5% | 41.7% | 92.0% | 332ms |
-| Traditional ML | 55.4% | 100.0% | 0.0% | 150ms |
+| Model            | Accuracy  | NSFW Recall | SFW Accuracy | Speed |
+| ---------------- | --------- | ----------- | ------------ | ----- |
+| **FlowNSFW**     | **96.4%** | **98.3%**   | **94.0%**    | 411ms |
+| YOLOv11 v16_s    | 70.0%     | 60.0%       | 82.0%        | 265ms |
+| YOLOv11 auto_v14 | 64.5%     | 41.7%       | 92.0%        | 332ms |
+| Traditional ML   | 55.4%     | 100.0%      | 0.0%         | 150ms |
 
 **Why FlowNSFW wins**: Motion-dependent NSFW content is invisible in single frames. Optical flow + Mamba SSM captures spatiotemporal patterns that frame-based detectors miss.
 
@@ -81,11 +81,11 @@ NSFW / SFW
 
 ### 2. Why Mamba SSM?
 
-| Backend | Accuracy | Complexity | 8-frame | 64-frame |
-|---------|----------|------------|---------|----------|
-| **Mamba SSM** | **96.4%** | O(N) | ✅ | ✅ |
-| Transformer | 94.1% | O(N²) | ✅ | ❌ (OOM) |
-| GRU | 89.2% | O(N) | ✅ | ⚠️ (slow) |
+| Backend       | Accuracy  | Complexity | 8-frame | 64-frame |
+| ------------- | --------- | ---------- | ------- | -------- |
+| **Mamba SSM** | **96.4%** | O(N)       | ✅       | ✅        |
+| Transformer   | 94.1%     | O(N²)      | ✅       | ❌ (OOM)  |
+| GRU           | 89.2%     | O(N)       | ✅       | ⚠️ (slow) |
 
 Mamba SSM provides O(N) selective state-space modeling with hardware-efficient parallel scan, enabling longer sequences without the quadratic cost of attention.
 
@@ -142,13 +142,13 @@ python scripts/train.py \
 
 ## 📈 Ablation Study
 
-| Configuration | Accuracy | NSFW Recall | Delta |
-|---------------|----------|-------------|-------|
-| Full model | 96.4% | 98.3% | Baseline |
-| - Remove flow | 78.3% | 72.1% | **-18.1%** |
-| - Mamba → GRU | 89.2% | 85.4% | -7.2% |
-| - Multi-scale training | 81.2% | 79.0% | -15.2% |
-| - Balanced sampler | 55.4% | 100.0% (SFW: 0%) | -41.0% |
+| Configuration          | Accuracy | NSFW Recall      | Delta      |
+| ---------------------- | -------- | ---------------- | ---------- |
+| Full model             | 96.4%    | 98.3%            | Baseline   |
+| - Remove flow          | 78.3%    | 72.1%            | **-18.1%** |
+| - Mamba → GRU          | 89.2%    | 85.4%            | -7.2%      |
+| - Multi-scale training | 81.2%    | 79.0%            | -15.2%     |
+| - Balanced sampler     | 55.4%    | 100.0% (SFW: 0%) | -41.0%     |
 
 **Conclusion**: Optical flow is the core innovation. Mamba SSM and multi-scale training are essential for high performance.
 
